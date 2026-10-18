@@ -55,8 +55,9 @@
 <pre><code class="env">DATABASE_URL="postgresql://wraith:wraith@localhost:5432/wraith"
 DIRECT_DATABASE_URL="postgresql://wraith:wraith@localhost:5432/wraith"
 STELLAR_NETWORK="testnet"
-# SOROBAN_RPC_URL is optional on testnet — the default public endpoint is used automatically
-SOROBAN_RPC_URL=
+# SOROBAN_RPC_URL_TESTNET (or legacy SOROBAN_RPC_URL) is optional on testnet —
+# the default public endpoint (https://soroban-testnet.stellar.org) is used automatically
+SOROBAN_RPC_URL_TESTNET=
 
 START_LEDGER=
 SAC_CONTRACT_IDS=
@@ -67,8 +68,10 @@ PORT=3000
 <pre><code class="env">DATABASE_URL="postgresql://wraith:wraith@localhost:5432/wraith"
 DIRECT_DATABASE_URL="postgresql://wraith:wraith@localhost:5432/wraith"
 STELLAR_NETWORK="mainnet"
-# Required on mainnet — no free public Soroban RPC exists
-SOROBAN_RPC_URL="https://mainnet.stellar.validationcloud.io/v1/<YOUR_API_KEY>"
+# Required on mainnet — no free public Soroban RPC exists:
+# In multi-network setups (`NETWORKS=testnet,mainnet`), set SOROBAN_RPC_URL_MAINNET.
+# In single-network deployments (`STELLAR_NETWORK=mainnet`), SOROBAN_RPC_URL may also be used.
+SOROBAN_RPC_URL_MAINNET="https://mainnet.stellar.validationcloud.io/v1/<YOUR_API_KEY>"
 
 # Strongly recommended on mainnet: filter to specific contracts to reduce load
 SAC_CONTRACT_IDS="CTOKEN1...,CTOKEN2..."
@@ -77,7 +80,7 @@ PORT=3000
 </code><button type="button">Copy</button></pre>
 
 <blockquote>
-<p><strong>Tip:</strong> If you omit both <code>SOROBAN_RPC_URL</code> and <code>STELLAR_NETWORK</code>, Wraith will exit immediately with a clear error explaining what to set.</p>
+<p><strong>Tip:</strong> In multi-network mode (<code>NETWORKS=testnet,mainnet</code>), <code>SOROBAN_RPC_URL_MAINNET</code> is required to index mainnet. If omitted, the mainnet indexer will not start and mainnet reads will be marked stale with an explicit staleness indicator (<code>stale: true</code>, <code>indexer_running: false</code>, header <code>X-Data-Stale: true</code>). Single-network deployments may still use <code>SOROBAN_RPC_URL</code> with <code>STELLAR_NETWORK=mainnet</code>.</p>
 </blockquote>
 <h3 id="3-start-postgres" class="tsd-anchor-link">3. Start Postgres<a href="#3-start-postgres" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <pre><code class="bash"><span class="hl-0">docker</span><span class="hl-1"> </span><span class="hl-2">compose</span><span class="hl-1"> </span><span class="hl-2">up</span><span class="hl-1"> </span><span class="hl-3">-d</span><span class="hl-1"> </span><span class="hl-2">db</span>
@@ -455,12 +458,22 @@ exports with the ledger or date bounds.</p>
 <tr>
 <td><code>STELLAR_NETWORK</code></td>
 <td>—</td>
-<td><code>testnet</code> or <code>mainnet</code>. Testnet auto-configures the default RPC URL.</td>
+<td><code>testnet</code> or <code>mainnet</code>. Default single-network mode.</td>
+</tr>
+<tr>
+<td><code>SOROBAN_RPC_URL_TESTNET</code></td>
+<td><code>https://soroban-testnet.stellar.org</code></td>
+<td>Explicit Soroban RPC endpoint for testnet.</td>
+</tr>
+<tr>
+<td><code>SOROBAN_RPC_URL_MAINNET</code></td>
+<td>—</td>
+<td>Explicit Soroban RPC endpoint for mainnet. Required to index mainnet in multi-network setups.</td>
 </tr>
 <tr>
 <td><code>SOROBAN_RPC_URL</code></td>
 <td><em>(see below)</em></td>
-<td>Soroban RPC endpoint. Overrides any network default. Required when <code>STELLAR_NETWORK=mainnet</code>.</td>
+<td>Legacy Soroban RPC endpoint. Scoped to the configured <code>STELLAR_NETWORK</code>. Required when <code>STELLAR_NETWORK=mainnet</code> if <code>SOROBAN_RPC_URL_MAINNET</code> is unset.</td>
 </tr>
 <tr>
 <td><code>STELLAR_RPC_URL</code></td>
@@ -520,13 +533,13 @@ exports with the ledger or date bounds.</p>
 </tbody>
 </table>
 <h3 id="rpc-url-resolution" class="tsd-anchor-link">RPC URL Resolution<a href="#rpc-url-resolution" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
-<p>Wraith resolves the RPC endpoint in this order and fails fast at startup if nothing is configured:</p>
+<p>Wraith resolves the RPC endpoint per network:</p>
 <ol>
-<li><code>SOROBAN_RPC_URL</code> — explicit; always wins</li>
-<li><code>STELLAR_RPC_URL</code> — backward-compat alias</li>
-<li><code>STELLAR_NETWORK=testnet</code> → <code>https://soroban-testnet.stellar.org</code> (free public endpoint)</li>
-<li><code>STELLAR_NETWORK=mainnet</code> → <strong>error</strong>: requires explicit <code>SOROBAN_RPC_URL</code></li>
-<li>Nothing set → <strong>error</strong>: clear message explaining what to configure</li>
+<li><code>SOROBAN_RPC_URL_&lt;NETWORK&gt;</code> (or <code>STELLAR_RPC_URL_&lt;NETWORK&gt;</code>) — explicit per-network variable (<code>SOROBAN_RPC_URL_TESTNET</code>, <code>SOROBAN_RPC_URL_MAINNET</code>). Always wins for that network.</li>
+<li><code>SOROBAN_RPC_URL</code> / <code>STELLAR_RPC_URL</code> — legacy variable; honoured <strong>only for the configured network</strong> (<code>STELLAR_NETWORK</code>), preventing accidental cross-network configuration.</li>
+<li><code>testnet</code> default → <code>https://soroban-testnet.stellar.org</code> (free public endpoint).</li>
+<li><code>mainnet</code> default → <strong>error</strong>: requires explicit <code>SOROBAN_RPC_URL_MAINNET</code> (or <code>SOROBAN_RPC_URL</code> with <code>STELLAR_NETWORK=mainnet</code>). There is no free public mainnet Soroban RPC.</li>
+<li>If <code>startAllIndexers</code> encounters an unconfigured RPC for an enabled network (e.g. mainnet missing <code>SOROBAN_RPC_URL_MAINNET</code>), that network loop is marked not started, <code>/status</code> reports <code>running: false</code> with the exact error, and read endpoints for that network serve existing indexed data with explicit staleness markers (<code>stale: true</code>, <code>indexer_running: false</code>, <code>X-Data-Stale: true</code>).</li>
 </ol>
 <h3 id="indexer-source-fallback" class="tsd-anchor-link">Indexer Source Fallback<a href="#indexer-source-fallback" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <p>If <code>HORIZON_URL</code> is set, the indexer checks the RPC source first and switches to Horizon when the RPC health check fails. It switches back automatically once RPC becomes healthy again.</p>
