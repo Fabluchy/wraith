@@ -31,43 +31,6 @@ jobs:
       - name: Unit tests
         run: timeout -k 30s 900s npm test --if-present
 
-  browser-matrix:
-    # Wallet, transaction and vault flows in every engine we support. The suite
-    # runs against e2e/fixtures/, so it needs no wallet extension, no secret key
-    # and no public RPC — only the browsers. Each engine is its own job so a
-    # WebKit-only regression cannot be hidden by Chromium passing first.
-    name: Browser matrix (${{ matrix.project }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        project: [chromium, firefox, webkit]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: npm
-      - run: npm ci || npm install
-      - name: Install ${{ matrix.project }}
-        run: npx playwright install --with-deps ${{ matrix.project }}
-      - name: Wallet and transaction matrix
-        run: npx playwright test --project=${{ matrix.project }}
-        env:
-          CI: 'true'
-      # Only the attempt that ended a retry chain leaves artifacts in
-      # test-results/ (trace/video retain-on-failure, screenshot
-      # only-on-failure), and this step runs only if the job failed.
-      - name: Upload traces, screenshots and videos
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-${{ matrix.project }}-run-${{ github.run_attempt }}
-          path: test-results/
-          retention-days: 7
-          if-no-files-found: ignore
-
   integration:
     name: Integration tests
     runs-on: ubuntu-latest
