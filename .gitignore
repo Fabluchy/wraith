@@ -9,7 +9,3 @@ docs/api/
 bench/results.json
 .aider*
 coverage/
-# Playwright artifacts
-playwright-report/
-test-results/
-blob-report/
